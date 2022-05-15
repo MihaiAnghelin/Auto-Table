@@ -12,10 +12,16 @@
 #define BTN_IN 10
 #define BTN_OUT 11
 
+#define POW_IN 12
+#define POW_OUT 13
+
 long pos = 0;
 long previousTime = 0;
 float errorPrevious = 0;
 float integral = 0;
+
+bool isOpen = false;
+bool isRunning = false;
 
 void readEncoder()
 {
@@ -95,6 +101,9 @@ void setup()
 	pinMode(BTN_IN, INPUT_PULLUP);
 	pinMode(BTN_OUT, OUTPUT);
 
+	pinMode(POW_IN, INPUT_PULLUP);
+	pinMode(POW_OUT, OUTPUT);
+
 	attachInterrupt(digitalPinToInterrupt(ENCA), readEncoder, RISING);
 }
 
@@ -104,12 +113,48 @@ void loop()
 
 	// digitalWrite(BTN_OUT, LOW);
 
-	if (digitalRead(BTN_IN) == LOW)
-	// if (pos < 10000)
+	// if the power button is turned off the motor will not be available
+	if (digitalRead(POW_IN) == HIGH)
 	{
-		Serial.println(pos);
-		setMotor(-1, 255, PWM, IN1, IN2);
+		setMotor(STOP, 0, PWM, IN1, IN2);
+
+		return;
+	}
+	
+	if (digitalRead(BTN_IN) == LOW)
+	{
+		isRunning = !isRunning;
+	}
+
+	if (isRunning)
+	{
+		if (!isOpen)
+		{
+			while (pos < 10000)
+			{
+				setMotor(BACKWARD, 255, PWM, IN1, IN2);
+
+				Serial.print("backward ");
+				Serial.println(pos);
+			}
+			isOpen = true;
+		}
+		else
+		{
+			while (pos > 0)
+			{
+				setMotor(FORWARD, 255, PWM, IN1, IN2);
+
+				Serial.print("forward ");
+				Serial.println(pos);
+			}
+			isOpen = false;
+		}
+
+		isRunning = false;
 	}
 	else
-		setMotor(0, 0, PWM, IN1, IN2);
+	{
+		setMotor(STOP, 0, PWM, IN1, IN2);
+	}
 }
