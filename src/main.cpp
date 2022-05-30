@@ -1,4 +1,3 @@
-#include "motor.h"
 #include <Arduino.h>
 
 #define ENCA 2
@@ -9,11 +8,17 @@
 
 #define PWM 5
 
-#define BTN_IN 10
-#define BTN_OUT 11
+#define BTN1_IN 10
+#define BTN1_OUT 11
+
+#define BTN2_IN 8
+#define BTN2_OUT 9
 
 #define POW_IN 12
 #define POW_OUT 13
+
+#define MAX_POS 21200
+#define MIN_POS 0
 
 long pos = 0;
 long previousTime = 0;
@@ -22,6 +27,36 @@ float integral = 0;
 
 bool isOpen = false;
 bool isRunning = false;
+
+bool open = false;
+bool close = false;
+
+#pragma region Motor
+
+#define FORWARD -1
+#define BACKWARD 1
+#define STOP 0
+
+void setMotor(int dir, int pwmVal, int pwm = PWM, int in1 = IN1, int in2 = IN2)
+{
+	analogWrite(pwm, pwmVal);
+
+	if (dir == FORWARD)
+	{
+		digitalWrite(in1, HIGH);
+		digitalWrite(in2, LOW);
+	}
+	else if (dir == BACKWARD)
+	{
+		digitalWrite(in1, LOW);
+		digitalWrite(in2, HIGH);
+	}
+	else if (dir == STOP)
+	{
+		digitalWrite(in1, LOW);
+		digitalWrite(in2, LOW);
+	}
+}
 
 void readEncoder()
 {
@@ -32,6 +67,8 @@ void readEncoder()
 	else
 		pos--;
 }
+
+#pragma endregion
 
 void PID()
 {
@@ -75,7 +112,7 @@ void PID()
 	}
 
 	// signal the motor
-	setMotor(dir, pwr, PWM, IN1, IN2);
+	setMotor(dir, pwr);
 
 	// store prev error
 	errorPrevious = error;
@@ -84,6 +121,120 @@ void PID()
 	Serial.print(" ");
 	Serial.print(pos);
 	Serial.println();
+}
+
+void oneButton()
+{
+	if (digitalRead(BTN1_IN) == LOW)
+	{
+		isRunning = !isRunning;
+	}
+
+	if (isRunning)
+	{
+		if (!isOpen)
+		{
+			while (pos < MAX_POS)
+			{
+				setMotor(BACKWARD, 255);
+
+				Serial.print("backward ");
+				Serial.println(pos);
+			}
+			isOpen = true;
+		}
+		else
+		{
+			while (pos > MIN_POS)
+			{
+				setMotor(FORWARD, 255);
+
+				Serial.print("forward ");
+				Serial.println(pos);
+			}
+			isOpen = false;
+		}
+
+		isRunning = false;
+	}
+	else
+	{
+		setMotor(STOP, 0);
+	}
+}
+
+void twoButton()
+{
+	if (digitalRead(BTN1_IN) == LOW)
+	{
+		open = true;
+		close = false;
+
+		Serial.println("OPEN");
+
+		isRunning = true;
+	}
+	else if (digitalRead(BTN2_IN) == LOW)
+	{
+		close = true;
+		open = false;
+
+		Serial.println("CLOSE");
+
+		isRunning = true;
+	}
+
+	if (isRunning)
+	{
+		Serial.println("RUNNING");
+
+		if (open)
+		{
+			while (pos < pos + MAX_POS)
+			{
+				setMotor(BACKWARD, 255);
+				Serial.println("MOTOR BACKWARD");
+			}
+		}
+		else if (close)
+		{
+			while (pos > pos - MAX_POS)
+			{
+				setMotor(FORWARD, 255);
+				Serial.println("MOTOR FORWARD");
+			}
+		}
+
+		open = false;
+		close = false;
+		isRunning = false;
+
+		Serial.println("STOPPED");
+	}
+	else
+	{
+		setMotor(STOP, 0);
+	}
+}
+
+void openCloseButtons()
+{
+	if (digitalRead(BTN1_IN) == LOW)
+	{
+		setMotor(BACKWARD, 255);
+		Serial.print("BACKWARD ");
+		Serial.println(pos);
+	}
+	else if (digitalRead(BTN2_IN) == LOW)
+	{
+		setMotor(FORWARD, 255);
+		Serial.print("FORWARD ");
+		Serial.println(pos);
+	}
+	else
+	{
+		setMotor(STOP, 0);
+	}
 }
 
 void setup()
@@ -98,8 +249,11 @@ void setup()
 	pinMode(ENCA, INPUT);
 	pinMode(ENCB, INPUT);
 
-	pinMode(BTN_IN, INPUT_PULLUP);
-	pinMode(BTN_OUT, OUTPUT);
+	pinMode(BTN1_IN, INPUT_PULLUP);
+	pinMode(BTN1_OUT, OUTPUT);
+
+	pinMode(BTN2_IN, INPUT_PULLUP);
+	pinMode(BTN2_OUT, OUTPUT);
 
 	pinMode(POW_IN, INPUT_PULLUP);
 	pinMode(POW_OUT, OUTPUT);
@@ -111,50 +265,15 @@ void loop()
 {
 	// PID();
 
-	// digitalWrite(BTN_OUT, LOW);
-
 	// if the power button is turned off the motor will not be available
 	if (digitalRead(POW_IN) == HIGH)
 	{
-		setMotor(STOP, 0, PWM, IN1, IN2);
+		setMotor(STOP, 0);
 
 		return;
 	}
-	
-	if (digitalRead(BTN_IN) == LOW)
-	{
-		isRunning = !isRunning;
-	}
 
-	if (isRunning)
-	{
-		if (!isOpen)
-		{
-			while (pos < 10000)
-			{
-				setMotor(BACKWARD, 255, PWM, IN1, IN2);
-
-				Serial.print("backward ");
-				Serial.println(pos);
-			}
-			isOpen = true;
-		}
-		else
-		{
-			while (pos > 0)
-			{
-				setMotor(FORWARD, 255, PWM, IN1, IN2);
-
-				Serial.print("forward ");
-				Serial.println(pos);
-			}
-			isOpen = false;
-		}
-
-		isRunning = false;
-	}
-	else
-	{
-		setMotor(STOP, 0, PWM, IN1, IN2);
-	}
+	oneButton();
+	// twoButton();
+	// openCloseButtons();
 }
